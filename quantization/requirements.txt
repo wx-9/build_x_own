@@ -1,0 +1,6 @@
+torch
+numpy
+matplotlib
+pillow
+jupyterlab
+msvc-runtime; sys_platform == "win32"
