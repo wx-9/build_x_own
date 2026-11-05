@@ -335,7 +335,7 @@ class W8A16LinearLayer(nn.Module):
         )
         self.register_buffer(
             "scales",
-            torch.randn((1, out_features), dtype=dtype)
+            torch.randn(out_features, dtype=dtype)
         )
         if bias:
             self.register_buffer("bias",
