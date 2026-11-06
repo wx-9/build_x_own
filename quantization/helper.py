@@ -397,3 +397,68 @@ class DummyModel(torch.nn.Module):
         self.linear_1 = nn.Linear(1, 1)
         self.linear_2 = nn.Linear(1, 1)
         self.lm_head = nn.Linear(1, 1, bias=False)
+
+
+# ============================================================
+#  低比特权重的位打包 / 解包
+# ============================================================
+
+def pack_weights(uint8tensor, bits):
+    """将一维低比特码值打包成字节，较早的码值占用每字节的低位。
+
+    bits 支持 1、2、4、8；输入为 torch.uint8，值域为 [0, 2**bits - 1]。
+    输入长度必须能填满字节，不进行尾部补零。这里只改变存储布局。
+    """
+    if isinstance(bits, bool) or not isinstance(bits, int) or bits not in (1, 2, 4, 8):
+        raise ValueError("bits must be one of 1, 2, 4, or 8")
+    if not isinstance(uint8tensor, torch.Tensor) or uint8tensor.dtype != torch.uint8:
+        raise TypeError("The input must be a torch.uint8 tensor")
+    if uint8tensor.dim() != 1:
+        raise ValueError("The input tensor must be one-dimensional")
+    if uint8tensor.numel() * bits % 8 != 0:
+        raise ValueError(
+            f"The input length must be a multiple of {8 // bits} - "
+            f"got {uint8tensor.numel()}"
+        )
+    if uint8tensor.numel() and uint8tensor.max().item() > (1 << bits) - 1:
+        raise ValueError(f"Input values must be in [0, {(1 << bits) - 1}]")
+
+    num_values = uint8tensor.numel() * bits // 8
+    num_steps = 8 // bits
+    unpacked_idx = 0
+    packed_tensor = torch.zeros(
+        num_values, dtype=torch.uint8, device=uint8tensor.device
+    )
+
+    for i in range(num_values):
+        for j in range(num_steps):
+            packed_tensor[i] |= uint8tensor[unpacked_idx] << (bits * j)
+            unpacked_idx += 1
+    return packed_tensor
+
+
+def unpack_weights(uint8tensor, bits):
+    """按 pack_weights 的低位优先顺序，将字节恢复为一维 uint8 码值。
+
+    bits 必须与打包时一致；返回值仍是整数码值，没有进行反量化。
+    """
+    if isinstance(bits, bool) or not isinstance(bits, int) or bits not in (1, 2, 4, 8):
+        raise ValueError("bits must be one of 1, 2, 4, or 8")
+    if not isinstance(uint8tensor, torch.Tensor) or uint8tensor.dtype != torch.uint8:
+        raise TypeError("The input must be a torch.uint8 tensor")
+    if uint8tensor.dim() != 1:
+        raise ValueError("The input tensor must be one-dimensional")
+
+    num_values = uint8tensor.numel() * 8 // bits
+    num_steps = 8 // bits
+    unpacked_idx = 0
+    unpacked_tensor = torch.zeros(
+        num_values, dtype=torch.uint8, device=uint8tensor.device
+    )
+    mask = (1 << bits) - 1
+
+    for i in range(uint8tensor.numel()):
+        for j in range(num_steps):
+            unpacked_tensor[unpacked_idx] = (uint8tensor[i] >> (bits * j)) & mask
+            unpacked_idx += 1
+    return unpacked_tensor

@@ -7,12 +7,13 @@
 | 文件 | 用途 |
 | --- | --- |
 | [mini_quantization.ipynb](mini_quantization.ipynb) | 学习主入口：按主题整理的讲解、代码单元和观察任务 |
-| [helper.py](helper.py) | 用户提供的 399 行辅助模块，保持原始实现 |
+| [helper.py](helper.py) | 量化辅助模块；保留既有量化实现，新增位打包 / 解包函数 |
 | [original/mini_quantization_export.py](original/mini_quantization_export.py) | 保留用户导出脚本的代码、演示顺序和原注释，作为整理前对照；空行做了归整 |
 | [requirements.txt](requirements.txt) | CPU 基础实验与 Jupyter 依赖 |
 | [requirements-models.txt](requirements-models.txt) | CodeGen、DETR、OPT 等可选模型实验依赖 |
 | [experiments/TEMPLATE.md](experiments/TEMPLATE.md) | 可复现实验记录模板 |
 | [VALIDATION.md](VALIDATION.md) | 这次整理的验证范围与结果 |
+| [tests/test_bit_packing.py](tests/test_bit_packing.py) | 位打包的字节排列、往返恢复和输入边界验证 |
 
 ## 学习范围
 
@@ -20,6 +21,7 @@
 | --- | --- | --- |
 | 1 | 非对称 / 对称 INT8 量化 | scale、zero-point 怎样决定整数映射和重建误差？ |
 | 2 | Per-tensor / Per-channel / Per-group | 量化粒度变化时，误差与 scale 元数据有什么取舍？ |
+| 2.1 | 位打包 / 解包 | 怎样把低比特码值真正压入字节，并无损恢复？ |
 | 3 | W8A32 与量化线性层 | 权重存储为 INT8 后，前向计算实际使用什么 dtype？ |
 | 4 | 递归替换 `nn.Linear` | 替换了哪些层，为什么保留 `lm_head`？ |
 | 5（可选） | CodeGen / DETR / OPT | 如何在真实模型中观察输出与权重占用变化？ |
@@ -49,6 +51,20 @@ python -m jupyterlab mini_quantization.ipynb
 
 Windows 下保留了原脚本的 `msvc_runtime` 导入，并放在 `torch` 之前；其他系统跳过该导入。依赖中使用平台条件，仅 Windows 安装对应运行库。Python 版本请以 [PyTorch 安装说明](https://pytorch.org/get-started/locally/)支持的环境为准，原脚本中的“Python 3.15”注释不代表本项目完成了该版本兼容性验证。
 
+## 位打包与解包
+
+Notebook 的「4.1 低比特权重打包与解包」使用 8 个 2-bit 码值，打包后为 `[228, 27]` 两个字节，再验证解包结果与输入一致。
+
+`pack_weights` 和 `unpack_weights` 支持 1、2、4、8 bit，输入是一维 `torch.uint8`。打包输入必须在 `[0, 2**bits - 1]`，长度必须能填满字节；不自动补零。每字节按低位优先存放，输出保留输入 device。
+
+打包是无损存储转换，不进行浮点量化或反量化。示例中的 8 B → 2 B 仅统计码值，不包含 scale 等元数据。
+
+安装基础依赖后，在本目录运行：
+
+```bash
+python -m unittest discover -s tests -v
+```
+
 ## 可选模型实验
 
 安装额外依赖后，按需开启一个模型开关：
@@ -73,7 +89,7 @@ python -m pip install -r requirements-models.txt
 - 为环境导入加入 Windows 判断，固定随机种子，提供模型实验和上传开关。
 - 将单个线性层示例的声明改为 `in_features=8, out_features=4`，与 `(4, 8)` 权重一致；该示例仍使用原始 BF16 权重。
 - 对比行通道和列通道时，分别标注 `dim=0` 与 `dim=1`，避免两行都只显示 “Per-Channel”。
-- `helper.py` 保持用户上传的原始字节与接口，包括 `linear_quantizaton` 这个原有拼写。
+- 初次归档保留了用户上传的 helper；后续增加 `pack_weights` 和 `unpack_weights`。既有函数与类保留当前仓库版本，包括 `linear_quantizaton` 这个原有拼写。
 
 ## 计算约定与工程边界
 
