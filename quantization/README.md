@@ -123,3 +123,11 @@ MSE = mean((x - x_hat)^2)
 - [ ] 序列化后重建量化层结构并成功加载 state_dict；只有 `.pth` 文件并不等于可直接加载的完整 Transformers 模型仓库。
 
 完成一个问题后，补上最小可复现输入、修复、测试和自己的解释，再勾选对应项。实验记录使用 [模板](experiments/TEMPLATE.md)，保留同一输入、参数、dtype、随机种子与实际测试命令。
+
+## 论文算法 Demo
+
+基础量化学习保留在 [mini_quantization.ipynb](mini_quantization.ipynb)；每篇论文单独一个简短 Notebook，按「算法介绍 → 核心函数 → 调用与 FP32 误差对比」组织。
+
+- [LLM.int8() Notebook](algorithms/llm_int8/llm_int8.ipynb)：异常特征检测、Vector-wise INT8、FP16 异常路径及简单阈值实验。
+
+从 `quantization/` 启动 JupyterLab，打开上述 Notebook 依次运行三个单元即可。该示例是 CPU 数值教学实现，不代表优化 INT8 GEMM 或生产级 bitsandbytes 实现。
